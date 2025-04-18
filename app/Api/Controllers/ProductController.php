@@ -18,7 +18,7 @@ class ProductController
     {
         try {
             // Recupera query parametri
-            $perPage = $request->get('per_page', 50); // default 50
+            $perPage = $request->get('per_page', 20); // default 20
             $productsPaginator = $this->productService->getPaginated($perPage);
 
             // Warnings (prodotti senza prezzi)
