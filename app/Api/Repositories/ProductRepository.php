@@ -13,7 +13,6 @@ class ProductRepository
             ->table('AR')
             ->select('Cd_AR', 'Descrizione', 'Cd_ARMisura')
             ->where('Obsoleto', 0)
-            // ->limit(100)
             ->get();
 
         return $rows->map(fn($row) => new ProductDto(
@@ -25,7 +24,7 @@ class ProductRepository
         ))->toArray();                  
     }
 
-    public function getPaginated(int $perPage = 100)
+    public function getPaginated(int $perPage = 10)
     {
         return DB::connection('arca')
             ->table('AR')

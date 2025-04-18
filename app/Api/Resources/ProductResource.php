@@ -14,6 +14,7 @@ class ProductResource extends JsonResource
             'unita_misura' => $this->unitaMisura,
             // 'unita_misure' => $this->unitaMisure,
             'prezzi' => $this->prezzi,
+            'immagini' => $this->immagini,
         ];
     }
 }
