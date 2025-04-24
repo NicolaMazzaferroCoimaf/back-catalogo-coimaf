@@ -4,26 +4,23 @@ namespace App\Api\Dtos;
 
 class ProductDto
 {
-    public string $codice;
-    public string $descrizione;
-    public ?string $unitaMisura;
-    public array $prezzi = [];
-    public array $immagini = [];
-    // public array $unitaMisure = [];
+    public string $code;
+    public string $description;
+    public ?string $unit;
+    public array $prices = [];
+    public array $images = [];
 
     public function __construct(
-        string $codice,
-        string $descrizione,
-        ?string $unitaMisura,
-        array $prezzi = [],
-        array $immagini = []
-        // array $unitaMisure = []
+        string $code,
+        string $description,
+        ?string $unit,
+        array $prices = [],
+        array $images = []
     ) {
-        $this->codice = trim($codice);
-        $this->descrizione = trim($descrizione);
-        $this->unitaMisura = trim((string) $unitaMisura);
-        $this->prezzi = $prezzi;
-        $this->immagini = $immagini;
-        // $this->unitaMisure = $unitaMisure;
+        $this->code = trim($code);
+        $this->description = trim($description);
+        $this->unit = trim((string) $unit);
+        $this->prices = $prices;
+        $this->images = $images;
     }
 }

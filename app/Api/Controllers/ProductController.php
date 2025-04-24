@@ -2,37 +2,30 @@
 
 namespace App\Api\Controllers;
 
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use App\Api\Services\ProductService;
 use App\Api\Resources\ProductResource;
+use App\Api\Resources\ProductSummaryResource;
 use App\Api\Responses\Traits\ApiResponds;
 
 class ProductController
 {
     use ApiResponds;
-    
+
     public function __construct(private ProductService $productService) {}
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
         try {
-            // Recupera query parametri
-            $perPage = $request->get('per_page', 20); // default 20
+            $perPage = $request->get('per_page', 20);
             $productsPaginator = $this->productService->getPaginated($perPage);
 
-            // Warnings (prodotti senza prezzi)
-            $warnings = [];
-            $prodottiSenzaPrezzo = $productsPaginator->getCollection()->filter(fn($p) => empty($p->prezzi));
-            if ($prodottiSenzaPrezzo->count() > 0) {
-                $warnings[] = $prodottiSenzaPrezzo->count() . ' prodotti senza prezzo';
-            }
+            $warnings = $this->getWarningsForProducts($productsPaginator->getCollection());
 
-            // Resource paginata
-            $responseData = ProductResource::collection($productsPaginator);
+            $responseData = ProductSummaryResource::collection($productsPaginator);
 
-            // Metadata per frontend
-            $extra = [
+            $meta = [
                 'current_page' => $productsPaginator->currentPage(),
                 'per_page' => $productsPaginator->perPage(),
                 'last_page' => $productsPaginator->lastPage(),
@@ -40,18 +33,48 @@ class ProductController
             ];
 
             return count($warnings) > 0
-                ? $this->warning($responseData, 'Prodotti caricati con avvisi', $warnings, $extra)
-                : $this->success($responseData, 'Prodotti caricati con successo', $extra);
+                ? $this->warning($responseData, 'Products loaded with warnings', $warnings, $meta)
+                : $this->success($responseData, 'Products loaded successfully', $meta);
 
         } catch (\Throwable $e) {
-            \Log::error('Errore grave nel controller:', [
+            \Log::error('Fatal error in controller:', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
             ]);
-        
-            return $this->error('Errore nel recupero prodotti: ' . $e->getMessage(), 500);
-        }    
+
+            return $this->error('Error loading products: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function show(string $code): JsonResponse
+    {
+        try {
+            $product = $this->productService->getByCode($code);
+
+            if (!$product) {
+                return $this->notFound("Product with code $code not found.");
+            }
+
+            return $this->success(new ProductResource($product), "Product loaded successfully");
+        } catch (\Throwable $e) {
+            \Log::error("Error loading product $code: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return $this->error("Internal error", 500);
+        }
+    }
+
+    private function getWarningsForProducts($products): array
+    {
+        $warnings = [];
+
+        $withoutPrice = $products->filter(fn($p) => empty($p->prices));
+        if ($withoutPrice->count() > 0) {
+            $warnings[] = $withoutPrice->count() . ' products without prices';
+        }
+
+        return $warnings;
     }
 }

@@ -4,16 +4,18 @@ namespace App\Api\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class ProductResource extends JsonResource
+class ProductSummaryResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $price = collect($this->prices)
+            ->first()['items'][0]['price'] ?? null;
+
         return [
             'code' => $this->code,
             'description' => $this->description,
-            'unit' => $this->unit,
-            'prices' => $this->prices,
             'images' => $this->images,
+            'price' => $price,
         ];
     }
 }

@@ -14,3 +14,4 @@ Route::get('/', function() {
 });
 
 Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{codice}', [ProductController::class, 'show']);

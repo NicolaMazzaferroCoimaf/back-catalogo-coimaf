@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Storage;
 
 class ProductImageRepository
 {
-    public function getImagesByProduct(array $codiciProdotto = []): array
+    public function getImagesByProduct(array $productCodes = []): array
     {
         $query = DB::connection('arca')
             ->table('ARImg')
@@ -15,27 +15,26 @@ class ProductImageRepository
             ->orderBy('Cd_AR')
             ->orderBy('Riga');
 
-        if (!empty($codiciProdotto)) {
-            $query->whereIn('Cd_AR', $codiciProdotto);
+        if (!empty($productCodes)) {
+            $query->whereIn('Cd_AR', $productCodes);
         }
 
         $rows = $query->get();
         $result = [];
 
         foreach ($rows as $row) {
-            $cdAr = trim($row->Cd_AR);
-            $riga = trim($row->Riga);
+            $code = trim($row->Cd_AR);
+            $rowNumber = trim($row->Riga);
             $ext = pathinfo($row->Picture1OriginalFile, PATHINFO_EXTENSION) ?: 'jpg';
-            $filename = $cdAr . '_' . $riga . '.' . $ext;
-            $path = "prodotti/$filename";
+            $filename = $code . '_' . $rowNumber . '.' . $ext;
+            $path = "products/$filename";
 
-            // Salva solo se non esiste
             if (!Storage::disk('public')->exists($path)) {
                 Storage::disk('public')->put($path, $row->Picture1Raw);
             }
 
-            $result[$cdAr][] = [
-                'nome_file' => $filename,
+            $result[$code][] = [
+                'file_name' => $filename,
                 'url' => Storage::disk('public')->url($path),
             ];
         }

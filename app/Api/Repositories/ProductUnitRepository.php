@@ -17,9 +17,9 @@ class ProductUnitRepository
 
         foreach ($rows as $row) {
             $result[trim($row->Cd_AR)][] = [
-                'unita_misura' => trim($row->Cd_ARMisura),
-                'fattore' => (float) $row->UMFatt,
-                'default' => $row->DefaultMisura == 1
+                'unit' => trim($row->Cd_ARMisura),
+                'factor' => (float) $row->UMFatt,
+                'default' => $row->DefaultMisura == 1,
             ];
         }
 

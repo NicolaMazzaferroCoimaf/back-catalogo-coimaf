@@ -6,6 +6,8 @@ use App\Api\Repositories\ProductRepository;
 use App\Api\Repositories\ProductUnitRepository;
 use App\Api\Repositories\ProductImageRepository;
 use App\Api\Repositories\ProductPriceRepository;
+use Illuminate\Pagination\LengthAwarePaginator;
+use App\Api\Dtos\ProductDto;
 
 class ProductService
 {
@@ -18,119 +20,92 @@ class ProductService
 
     public function getAll(): array
     {
-        // 1. Recupero tutti i prodotti
-        $prodotti = $this->productRepository->getAll();
-
-        // 2. Recupero unità di misura associate per ogni prodotto
-        $unitaPerArticolo = $this->productUnitRepository->getUnitsByProduct();
-
-        // 3. Recupero prezzi calcolati (con sconti e unità)
-        $prezziFlat = $this->productPriceRepository->getLatestPricesForProducts($unitaPerArticolo);
-
-        // 4. Assemblo i prodotti
-        foreach ($prodotti as $prodotto) {
-            $codice = $prodotto->codice;
-
-            // Assegno unità di misura
-            // $prodotto->unitaMisure = $unitaPerArticolo[$codice] ?? [];
-
-            // Recupero tutte le voci prezzo per il prodotto
-            $prezzi = $prezziFlat[$codice] ?? [];
-
-            // Raggruppamento per listino
-            $prezziPerListino = [];
-
-            foreach ($prezzi as $entry) {
-                $campiRichiesti = [
-                    'codice_listino', 'listino', 'unita_misura',
-                    'fattore', 'default', 'prezzo', 'sconto', 'prezzo_netto'
-                ];
-                $codice = $prodotto->codice ?? 'N/A';
-
-                foreach ($campiRichiesti as $campo) {
-                    if (!array_key_exists($campo, $entry)) {
-                        \Log::warning("Campo mancante [$campo] per prodotto $codice", ['entry' => $entry]);
-                        continue 2; // salta questa entry
-                    }
-                }
-
-                $codiceListino = $entry['codice_listino'];
-
-                if (!isset($prezziPerListino[$codiceListino])) {
-                    $prezziPerListino[$codiceListino] = [
-                        'listino' => $entry['listino'],
-                        'voci' => [],
-                    ];
-                }
-
-                $prezziPerListino[$codiceListino]['voci'][] = [
-                    'unita_misura' => $entry['unita_misura'],
-                    'fattore' => $entry['fattore'],
-                    'default' => $entry['default'],
-                    'prezzo' => $entry['prezzo'],
-                    'sconto' => $entry['sconto'],
-                    'prezzo_netto' => $entry['prezzo_netto'],
-                ];
-            }
-
-            // Assegno i prezzi raggruppati al prodotto
-            $prodotto->prezzi = $prezziPerListino;
-        }
-
-        return $prodotti;
+        $products = $this->productRepository->getAll();
+        return $this->loadProductDetails($products);
     }
 
-    public function getPaginated(int $perPage = 100)
+    public function getPaginated(int $perPage = 100): LengthAwarePaginator
     {
         $paginator = $this->productRepository->getPaginated($perPage);
-        $prodotti = $paginator->getCollection();
-        $codici = $prodotti->pluck('codice')->toArray();
-    
-        $unitaPerArticolo = $this->productUnitRepository->getUnitsByProduct();
-        $prezziFlat = $this->productPriceRepository->getLatestPricesForProducts($unitaPerArticolo);
-        $immaginiPerArticolo = $this->productImageRepository->getImagesByProduct($codici);
-    
-        foreach ($prodotti as $prodotto) {
-            $codice = $prodotto->codice;
-    
-            // Prezzi
-            $prezzi = $prezziFlat[$codice] ?? [];
-            $prezziPerListino = [];
-    
-            foreach ($prezzi as $entry) {
-                $campiRichiesti = ['codice_listino', 'listino', 'unita_misura', 'fattore', 'default', 'prezzo', 'sconto', 'prezzo_netto'];
-    
-                foreach ($campiRichiesti as $campo) {
-                    if (!array_key_exists($campo, $entry)) {
-                        \Log::warning("Campo mancante [$campo] per prodotto $codice", ['entry' => $entry]);
-                        continue 2;
-                    }
-                }
-    
-                $codiceListino = $entry['codice_listino'];
-    
-                if (!isset($prezziPerListino[$codiceListino])) {
-                    $prezziPerListino[$codiceListino] = [
-                        'listino' => $entry['listino'],
-                        'voci' => [],
-                    ];
-                }
-    
-                $prezziPerListino[$codiceListino]['voci'][] = [
-                    'unita_misura' => $entry['unita_misura'],
-                    'fattore' => $entry['fattore'],
-                    'default' => $entry['default'],
-                    'prezzo' => $entry['prezzo'],
-                    'sconto' => $entry['sconto'],
-                    'prezzo_netto' => $entry['prezzo_netto'],
-                ];
-            }
-    
-            $prodotto->prezzi = $prezziPerListino;
-            $prodotto->immagini = $immaginiPerArticolo[$codice] ?? [];
-        }
-    
+        $products = $paginator->getCollection();
+        $paginator->setCollection(collect($this->loadProductDetails($products)));
+
         return $paginator;
     }
-      
+
+    public function getByCode(string $code): ?ProductDto
+    {
+        $product = $this->productRepository->findByCode($code);
+
+        if (!$product) {
+            return null;
+        }
+
+        $unitsByProduct = $this->productUnitRepository->getUnitsByProduct();
+        $flatPrices = $this->productPriceRepository->getLatestPricesForProducts($unitsByProduct);
+        $imagesByProduct = $this->productImageRepository->getImagesByProduct([$code]);
+
+        $prices = $flatPrices[$code] ?? [];
+        $product->prices = $this->groupPricesByList($prices);
+        $product->images = $imagesByProduct[$code] ?? [];
+
+        return $product;
+    }
+
+    private function loadProductDetails(iterable $products): iterable
+    {
+        $codes = collect($products)->pluck('code')->toArray();
+
+        $unitsByProduct = $this->productUnitRepository->getUnitsByProduct();
+        $flatPrices = $this->productPriceRepository->getLatestPricesForProducts($unitsByProduct);
+        $imagesByProduct = $this->productImageRepository->getImagesByProduct($codes);
+
+        foreach ($products as $product) {
+            $code = $product->code;
+            $prices = $flatPrices[$code] ?? [];
+
+            $product->prices = $this->groupPricesByList($prices);
+            $product->images = $imagesByProduct[$code] ?? [];
+        }
+
+        return $products;
+    }
+
+    private function groupPricesByList(array $prices): array
+    {
+        $result = [];
+
+        foreach ($prices as $entry) {
+            $requiredFields = [
+                'list_code', 'list_name', 'unit',
+                'factor', 'default', 'price', 'discount', 'net_price'
+            ];            
+
+            foreach ($requiredFields as $field) {
+                if (!array_key_exists($field, $entry)) {
+                    \Log::warning("Missing field [$field]", ['entry' => $entry]);
+                    continue 2;
+                }
+            }
+
+            $listCode = $entry['list_code'];
+
+            $result[$listCode] ??= [
+                'list' => $entry['list_name'],
+                'items' => [],
+            ];
+            
+            $result[$listCode]['items'][] = [
+                'unit' => $entry['unit'],
+                'factor' => $entry['factor'],
+                'default' => $entry['default'],
+                'price' => $entry['price'],
+                'discount' => $entry['discount'],
+                'net_price' => $entry['net_price'],
+            ];            
+            
+        }
+
+        return $result;
+    }
 }

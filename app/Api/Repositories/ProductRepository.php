@@ -16,11 +16,11 @@ class ProductRepository
             ->get();
 
         return $rows->map(fn($row) => new ProductDto(
-            codice: $row->Cd_AR,
-            descrizione: $row->Descrizione,
-            unitaMisura: $row->Cd_ARMisura,
-            prezzi: [],
-            // unitaMisure: []
+            code: $row->Cd_AR,
+            description: $row->Descrizione,
+            unit: $row->Cd_ARMisura,
+            prices: [],
+            images: []
         ))->toArray();                  
     }
 
@@ -32,11 +32,31 @@ class ProductRepository
             ->where('Obsoleto', 0)
             ->paginate($perPage)
             ->through(fn($row) => new ProductDto(
-                codice: $row->Cd_AR,
-                descrizione: $row->Descrizione,
-                unitaMisura: $row->Cd_ARMisura,
-                prezzi: []
+                code: $row->Cd_AR,
+                description: $row->Descrizione,
+                unit: $row->Cd_ARMisura,
+                prices: [],
+                images: []
             ));
-    }    
+    }
 
+    public function findByCode(string $code): ?ProductDto
+    {
+        $row = DB::connection('arca')
+            ->table('AR')
+            ->select('Cd_AR', 'Descrizione', 'Cd_ARMisura')
+            ->where('Cd_AR', $code)
+            ->where('Obsoleto', 0)
+            ->first();
+
+        if (!$row) return null;
+
+        return new ProductDto(
+            code: $row->Cd_AR,
+            description: $row->Descrizione,
+            unit: $row->Cd_ARMisura,
+            prices: [],
+            images: []
+        );
+    }
 }
